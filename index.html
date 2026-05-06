@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>50칸 퀴즈 게임</title>
+
+<style>
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: system-ui, sans-serif;
+    background: #f7f2e8;
+    color: #333;
+  }
+
+  .top {
+    width: min(100%, 500px);
+    margin: 0 auto 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+  }
+
+  .reset-btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 10px;
+    background: #8b6f47;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .board {
+    width: min(100%, 500px);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+
+  .cell {
+    min-height: clamp(48px, 11vw, 58px);
+    border: none;
+    border-radius: clamp(10px, 3vw, 14px);
+    background: white;
+    font-size: clamp(15px, 4vw, 18px);
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+    word-break: keep-all;
+  }
+
+  .cell.visited {
+    background: #fff6d8;
+    color: #8b6f47;
+  }
+
+  .cell.locked {
+    background: #c9f2d0;
+    color: #1f7a35;
+    cursor: pointer;
+    box-shadow: none;
+  }
+
+  .cell.locked.no-link {
+    cursor: default;
+  }
+
+  .modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+
+  .modal {
+    width: min(88vw, 360px);
+    max-height: 86vh;
+    overflow-y: auto;
+    background: #fffdf8;
+    border-radius: 16px;
+    padding: clamp(14px, 4vw, 16px);
+    text-align: center;
+  }
+
+  .modal img {
+    max-width: 100%;
+    max-height: min(220px, 40vh);
+    object-fit: contain;
+    border-radius: 10px;
+    margin: 8px 0;
+  }
+
+  .answer-input {
+    width: 90%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .submit-btn,
+  .close-btn {
+    margin-top: 10px;
+    padding: 9px 14px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .submit-btn {
+    background: #eee3d1;
+  }
+
+  .close-btn {
+    background: #333;
+    color: white;
+  }
+
+  .result {
+    min-height: 22px;
+    margin-top: 8px;
+    font-weight: 700;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="top">
+  <h1>50칸 퀴즈 게임</h1>
+  <button class="reset-btn" onclick="resetGame()">다시하기</button>
+</div>
+
+<div class="board" id="board"></div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalTitle"></h2>
+    <div id="modalContent"></div>
+    <div class="result" id="result"></div>
+    <button class="close-btn" onclick="closeModal()">닫기</button>
+  </div>
+</div>
+
+<script>
+const gameData = {
+  1: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q1.png",
+    question: "위 발췌 작품의 창조주는?",
+    answer: "이미누"
+  },
+
+  2: {
+    type: "textQuiz",
+    title: "발췌 제목 퀴즈",
+    question: `"……공작 저하라는 걸 알고 접근했습니다."<br>"뺙?"<br>뭐라고?<br>나는 화들짝 놀라 입에 물고 있던 ○○○의 머리카락을 떨어뜨렸다.`,
+    answer: "님아, 그 버튼을 누르지 마오"
+  },
+
+  3: {
+    type: "textQuiz",
+    title: "발췌 제목 퀴즈",
+    question: `“떨지 마, 아가피 무.”`,
+    answer: "백만 번의 키스보다"
+  },
+
+  4: {
+    type: "textQuiz",
+    title: "키워드 제목 퀴즈",
+    question: "#임신수 #피폐물 #동양풍 #집착공 #인외존재 #3권이하",
+    answer: "짐승"
+  },
+
+  5: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q5.png",
+    question: "위 발췌가 나오는 작품 제목은?",
+    answer: "헌트 포 페이트"
+  },
+
+  6: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q6.png",
+    question: "이 표지 조각의 작품 제목은?",
+    answer: "타임무버"
+  },
+
+  7: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q7.png",
+    question: "이 표지 조각의 작품 제목은?",
+    answer: "사랑도 코디가 되나요?"
+  },
+
+  8: {
+    type: "textQuiz",
+    title: "소개글 제목 퀴즈",
+    question: "소국의 잊힌 왕족이다. 누이를 대신해 북국의 후궁으로 간다.",
+    answer: "예호"
+  },
+
+  9: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q9.png",
+    question: "이 표지 조각 작품의 줄임말은?",
+    answer: "전화밤"
+  },
+
+  10: {
+    type: "textQuiz",
+    title: "발췌 제목 퀴즈",
+    question: "#동양풍 #임신수 #아들이름다이곤",
+    answer: "신루연가"
+  },
+
+  11: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q11.png",
+    question: "위 발췌의 작품명은?",
+    answer: "리로드"
+  },
+
+  12: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q12.png",
+    question: "위 발췌의 작품명은?",
+    answer: "저스트 핏!"
+  },
+
+  13: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q13.png",
+    question: "위 발췌의 작품명은?",
+    answer: "헌터는 하룻밤에 열번..."
+  },
+
+  14: {
+    type: "textQuiz",
+    title: "키워드 제목 퀴즈",
+    question: "#다공일수 #떡볶이아닌신전 #노삽입",
+    answer: "전마"
+  },
+
+  15: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q15.png",
+    question: "이 표지 조각의 작품명은?",
+    answer: "뉴 이어 맨"
+  },
+
+  16: {
+    type: "textQuiz",
+    title: "발췌 제목",
+    question: `바짝 긴장한 ○○○은 ○○○○의 옷자락을 꾹 잡고 눈을 부리부리하게 떴다. 누구라도 다가오면 물어 버릴 기세였다.<br>○○○○는 한 귀부인이 안고 들어온 작고 사나운 개를 쳐다보다가 ○○○을 내려다 보았다.`,
+    answer: "전설의 대장장이를 지켜 줘!"
+  },
+
+  17: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q17.png",
+    question: "위 발췌의 작품명은?",
+    answer: "접근 본능"
+  },
+
+  18: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q18.png",
+    question: "이 발췌 작품의 창조주는?",
+    answer: "온종일"
+  },
+
+  19: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q19.png",
+    question: "이 표지 조각의 작품 제목은?",
+    answer: "참된 기쁨과 건강한 행복에 대하여"
+  },
+
+  20: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q20.png",
+    question: "위 발췌의 작품명은?",
+    answer: "그 배우의 사생활"
+  },
+
+  21: {
+    type: "textQuiz",
+    title: "키워드 제목 퀴즈",
+    question: "#26번버스 #타임워프 #대형견공",
+    answer: "시간 정류장"
+  },
+
+  22: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q22.png",
+    question: "이 표지 조각의 작품명은?",
+    answer: "러닝타임"
+  },
+
+  23: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q23.png",
+    question: "위 발췌 작품의 공 이름은?",
+    answer: "강인헌"
+  },
+
+  24: {
+    type: "textQuiz",
+    title: "○○○는 누구?",
+    question: "\"○○○, 너는 세계를 지켜. 나는 너를 지킬게.\"",
+    answer: "이이선"
+  },
+
+  25: {
+    type: "textQuiz",
+    title: "소개글 제목 퀴즈",
+    question: `* 이럴 때 보세요: 늘 틱틱대던 공이 결정적인 순간에 솔직한 말로 수를 행복하게 하는 훈훈한 이야기가 보고 싶을 때
+* 공감 글귀: “아이…, 당신에게…, 아이…낳아주고 싶어요…. 예쁘고, 건강한 아기 낳아줄게요…. 제가, 드릴 수 있… 아이뿐…이에요.”
+“내가 약속했습니다. 아이도, 희연이도 살리세요.”`,
+    answer: "가시연꽃"
+  },
+
+  26: {
+  type: "textQuiz",
+  title: "소개글 제목 퀴즈",
+  question: `#도망수 #노예수 #광공 #서양풍
+* 이럴 때 보세요 : 의처증 개아가공의 찐득한 집착물이 보고 싶을 때
+* 공감 글귀 : “몇 번이든 널 가지겠다.”`,
+  answer: "우울한 연가"
+},
+
+  27: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q27.png",
+    question: "이 표지 조각의 작품명은?",
+    answer: "팬옵티콘"
+  },
+
+  28: {
+    type: "textQuiz",
+    title: "키워드 제목 퀴즈",
+    question: "#병약수 #미남공 #미남수 #차원이동/영혼바뀜 #적극수 #알콜중독수",
+    answer: "우울한 착각"
+  },
+
+  29: {
+    type: "textQuiz",
+    title: "발췌 제목",
+    question: `○은 나쁘지 않았다. 다만 표현을 어떻게 하는지, 어떻게 하면 사랑받는지를 모를 뿐이다. 미움받기 싫어하는 주제에 스스로를 사랑하는 방법조차 모르는 모습을 발견할 때마다 그게 안타까워서, 그리고 그걸 평범한 친구에 불과한 자신이 알려줄 수 있는 방법을 몰라서 ○○는 힘에 겨웠다.`,
+    answer: "기간트리카 데이브레이크!"
+  },
+
+  30: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q30.png",
+    question: "이 표지 조각의 작품명은?",
+    answer: "헤비 레인"
+  },
+
+  31: {
+    type: "textQuiz",
+    title: "소개글 제목 퀴즈",
+    question: `* 공감 글귀:
+“근데 원래 그래요?”
+“뭐가.”
+“사귀자고 말도 꺼내기 전에 바지에 손부터 넣는 거요.”
+○○이 뒤늦게 □□의 나이를 떠올린 듯 제 뺨을 쓸어내리며 말했다.
+“싫으면 싫다고 해. 맞춰 줄게.”`,
+    answer: "블랙 앤 그레이"
+  },
+
+  32: {
+    type: "textQuiz",
+    title: "키워드 작품의 창조주는 누구",
+    question: "#다공일수 #게임빙의",
+    answer: "고수김치"
+  },
+
+  33: {
+    type: "textQuiz",
+    title: "발췌 제목",
+    question: `"그러잖아도 추운데 옷까지 벗으라고? 날 얼어 죽게 만들 생각이군!"<br>"아닙니다, ○○. 한기를 녹이는 데에는 체온만한 것이 없거든요. 자, 다 벗으실 필요는 없습니다. 앞만 풀어 헤치시면 제가 이 뜨거운 몸으로 ○○의 추위를 녹여 드리겠나이다."<br>"시, 싫… 악! 부츠까지 벗든지! 왜 알몸에 부츠는 신고 있는 건가?"<br>"○○, 저도 발은 춥습니다."`,
+    answer: "스티그마타"
+  },
+
+  34: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q34.png",
+    question: "위 발췌의 작품명은?(부제 생략)",
+    answer: "칼.꼽.슬"
+  },
+
+  35: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q35.png",
+    question: "이 표지 조각 작품의 제목은?",
+    answer: "햇살 세 스푼"
+  },
+
+  36: {
+    type: "textQuiz",
+    title: "소개글 작품의 창조주는 누규?",
+    question: `*이럴 때 보세요: 더 큰 해피엔딩을 위한 찌통이 당길 때, 농사짓는 왕과 왕비가 궁금할 때`,
+    answer: "봄봄치"
+  },
+
+  37: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q37.png",
+    question: "위 발췌의 작품 제목",
+    answer: "드레스드 투 킬"
+  },
+
+  38: {
+    type: "textQuiz",
+    title: "작품 제목은?",
+    question: `“그럼 저희는 누가 지휘하나요?”<br>“물론 리더가요.”<br>"아, 나?”<br>○○○이 대꾸했다. 방금 처음 들었다는 반응이라 팀원들은 불길해졌다.`,
+    answer: "회귀자 인성 교육"
+  },
+
+  39: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q39.png",
+    question: "위 발췌의 작품 제목은?",
+    answer: "장미 도둑"
+  },
+
+  40: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q40.png",
+    question: "이 표지 조각의 작품명은?",
+    answer: "천운"
+  },
+
+  41: {
+    type: "imageQuiz",
+    title: "표지 퀴즈",
+    image: "images/q41.png",
+    question: "이 표지 조각의 작품명은?",
+    answer: "페어리 트랩"
+  },
+
+  42: {
+    type: "textQuiz",
+    title: "키워드 제목 퀴즈",
+    question: "#좀비공 #인간수 #호구공 #능력수",
+    answer: "데드 윗 미"
+  },
+
+  43: {
+    type: "textQuiz",
+    title: "소개글 제목 퀴즈",
+    question: `본명 여욱. 양반댁 막내 아들. 선천적으로 몸이 약해 금이야 옥이야 귀하게 자랐음. 형을 남몰래 짝사랑하고 있기에 형수에게 모질게 대하고, 결국엔 형수를 죽이려다가 형에게 쫓겨남. 뼛속까지 양반, 결벽증, 평생 사춘기일 듯. 더럽고 역겹고 냄새나는 것을 싫어함.
+특징- 고기를 먹지 못함.`,
+    answer: "백정"
+  },
+
+  44: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q44.png",
+    question: "위 발췌 작품의 공 이름은?",
+    answer: "제하량"
+  },
+
+  45: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q45.png",
+    question: "위 발췌 작품의 창조주는?",
+    answer: "민온"
+  },
+
+  46: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q46.png",
+    question: "위 발췌 작품의 제목은?",
+    answer: "토요일은 새우튀김"
+  },
+
+  47: {
+    type: "textQuiz",
+    title: "키워드 제목 퀴즈",
+    question: "#미스터리/오컬트 #추리/스릴러 #야구했공 #고아수",
+    answer: "불길한 손님"
+  },
+
+  48: {
+    type: "textQuiz",
+    title: "소개글 제목 찾기",
+    question: `*이럴 때 보세요: 할리킹 설정의 주인공들이 재난의 한복판에서 귀한 설정을 낭비하며 돈지랄은커녕 끼니를 걱정하고 구질구질하게 난관을 헤쳐 나가는, 그러다 연애도 하는 이야기가 보고 싶을 때.
+*공감 글귀:
+“왜 벗어요?”
+“더워서.”
+“젖꼭지 보여요.”
+“…….”
+“아, 젖꼭지랑 눈 마주쳤어.”`,
+    answer: "수상한 냄새가 난다"
+  },
+
+  49: {
+    type: "imageQuiz",
+    title: "발췌 퀴즈",
+    image: "images/q49.png",
+    question: "위 발췌 작품의 제목은?",
+    answer: "프리빌리지"
+  },
+
+  50: {
+    type: "textQuiz",
+    title: "발췌 제목",
+    question: "…○○○이 전생을 기억한다는 사실을 자신도 알고 있다고.<br>이 좆같은 새끼가.",
+    answer: "남궁세가 무사님은 로판에서 환생했다"
+  },
+
+
+};
+
+const STORAGE_KEY = "fiftyCellQuizGameState";
+
+const board = document.getElementById("board");
+const modalBg = document.getElementById("modalBg");
+const modalTitle = document.getElementById("modalTitle");
+const modalContent = document.getElementById("modalContent");
+const result = document.getElementById("result");
+
+let currentNumber = null;
+let currentCorrectAnswer = null;
+
+let gameState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+
+for (let i = 1; i <= 50; i++) {
+  const btn = document.createElement("button");
+  btn.className = "cell";
+  btn.dataset.num = i;
+
+  applyCellState(btn, i);
+  btn.addEventListener("click", () => handleCellClick(i));
+
+  board.appendChild(btn);
+}
+
+function applyCellState(btn, num) {
+  btn.classList.remove("locked", "visited", "no-link");
+  btn.removeAttribute("title");
+
+  if (gameState[num]?.locked) {
+    btn.classList.add("locked");
+    btn.textContent = gameState[num].displayText || "정답";
+    btn.title = "클릭하면 작품 링크가 새 창으로 열립니다";
+  } else if (gameState[num]?.visited) {
+    btn.classList.add("visited");
+    btn.textContent = "?";
+  } else {
+    btn.textContent = num;
+  }
+}
+
+function normalizeText(text) {
+  return String(text).replace(/\s+/g, "").trim();
+}
+
+function renderQuestion(text) {
+  return String(text || "문제 없음").replace(/\n/g, "<br>");
+}
+
+function getQuizData(num) {
+  const data = gameData[num] || {};
+
+  return {
+    type: data.type || "textQuiz",
+    title: data.title || `${num}번 퀴즈`,
+    image: data.image || "",
+    question: data.question || "문제 없음",
+    answer: data.answer || ""
+  };
+}
+
+
+function getWorkLink(num) {
+  const data = gameData[num] || {};
+
+  if (data.link) {
+    return data.link;
+  }
+
+  const keyword = data.answer || gameState[num]?.displayText || "";
+
+  if (!keyword) {
+    return "";
+  }
+
+  return `https://ridibooks.com/search?q=${encodeURIComponent(keyword)}`;
+}
+
+function handleCellClick(num) {
+  if (gameState[num]?.locked) {
+    const link = getWorkLink(num);
+
+    if (link) {
+      window.open(link, "_blank", "noopener,noreferrer");
+    }
+
+    return;
+  }
+
+  openCell(num);
+}
+
+function openCell(num) {
+  if (gameState[num]?.locked) return;
+
+  currentNumber = num;
+  result.textContent = "";
+  result.style.color = "";
+
+  const data = getQuizData(num);
+
+  modalTitle.textContent = data.title;
+  currentCorrectAnswer = data.answer;
+
+  const questionHtml = renderQuestion(data.question);
+
+  if (data.type === "imageQuiz" && data.image) {
+    modalContent.innerHTML = `
+      <img src="${data.image}" alt="${data.title}">
+      <p>${questionHtml}</p>
+      <input id="answerInput" class="answer-input" placeholder="정답 입력" autocomplete="off">
+      <br>
+      <button class="submit-btn" onclick="submitAnswer()">정답 확인</button>
+    `;
+  } else {
+    modalContent.innerHTML = `
+      <p>${questionHtml}</p>
+      <input id="answerInput" class="answer-input" placeholder="정답 입력" autocomplete="off">
+      <br>
+      <button class="submit-btn" onclick="submitAnswer()">정답 확인</button>
+    `;
+  }
+
+  modalBg.style.display = "flex";
+
+  setTimeout(() => {
+    document.getElementById("answerInput")?.focus();
+  }, 100);
+}
+
+function submitAnswer() {
+  const input = document.getElementById("answerInput");
+  if (!input || currentNumber === null) return;
+
+  const user = normalizeText(input.value);
+  const correct = normalizeText(currentCorrectAnswer);
+
+  if (user === correct) {
+    result.textContent = "정답!";
+    result.style.color = "green";
+
+    gameState[currentNumber] = {
+      locked: true,
+      visited: true,
+      displayText: currentCorrectAnswer
+    };
+
+    saveState();
+    updateCurrentCell();
+
+    setTimeout(() => {
+      closeModal();
+    }, 300);
+  } else {
+    result.textContent = "오답!";
+    result.style.color = "red";
+  }
+}
+
+function closeModal() {
+  if (currentNumber !== null && !gameState[currentNumber]?.locked) {
+    gameState[currentNumber] = {
+      locked: false,
+      visited: true,
+      displayText: "?"
+    };
+
+    saveState();
+    updateCurrentCell();
+  }
+
+  modalBg.style.display = "none";
+  currentNumber = null;
+  currentCorrectAnswer = null;
+}
+
+function updateCurrentCell() {
+  const btn = document.querySelector(`[data-num='${currentNumber}']`);
+  if (btn) applyCellState(btn, currentNumber);
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
+}
+
+function resetGame() {
+  if (confirm("초기화하시겠습니까?")) {
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (modalBg.style.display !== "flex") return;
+
+  if (e.key === "Enter") {
+    submitAnswer();
+  }
+
+  if (e.key === "Escape") {
+    closeModal();
+  }
+});
+
+modalBg.addEventListener("click", e => {
+  if (e.target === modalBg) {
+    closeModal();
+  }
+});
+</script>
+
+</body>
+</html>
